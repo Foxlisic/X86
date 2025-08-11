@@ -1,4 +1,0 @@
-Info (10281): Verilog HDL Declaration information at core.v(74): object "MODRM" differs only in case from object "modrm" in the same scope File: /home/fox/dev/03_x86/01_16bit_fubuki/core.v Line: 74
-Info (10281): Verilog HDL Declaration information at core.v(74): object "INTR" differs only in case from object "intr" in the same scope File: /home/fox/dev/03_x86/01_16bit_fubuki/core.v Line: 74
-Info (10281): Verilog HDL Declaration information at vga.v(25): object "X" differs only in case from object "x" in the same scope File: /home/fox/dev/03_x86/01_16bit_fubuki/c4e10/vga.v Line: 25
-Info (10281): Verilog HDL Declaration information at vga.v(26): object "Y" differs only in case from object "y" in the same scope File: /home/fox/dev/03_x86/01_16bit_fubuki/c4e10/vga.v Line: 26
