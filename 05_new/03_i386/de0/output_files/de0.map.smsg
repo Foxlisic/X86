@@ -1,0 +1,10 @@
+Warning (10273): Verilog HDL warning at de0.v(69): extended using "x" or "z" File: /home/fox/dev/03_x86/00_i386/de0/de0.v Line: 69
+Warning (10273): Verilog HDL warning at de0.v(70): extended using "x" or "z" File: /home/fox/dev/03_x86/00_i386/de0/de0.v Line: 70
+Info (10281): Verilog HDL Declaration information at de0.v(4): object "RESET_N" differs only in case from object "reset_n" in the same scope File: /home/fox/dev/03_x86/00_i386/de0/de0.v Line: 4
+Info (10281): Verilog HDL Declaration information at de0.v(7): object "CLOCK_50" differs only in case from object "clock_50" in the same scope File: /home/fox/dev/03_x86/00_i386/de0/de0.v Line: 7
+Info (10281): Verilog HDL Declaration information at core.v(43): object "MODRM" differs only in case from object "modrm" in the same scope File: /home/fox/dev/03_x86/00_i386/core.v Line: 43
+Info (10281): Verilog HDL Declaration information at core.v(43): object "INTERRUPT" differs only in case from object "interrupt" in the same scope File: /home/fox/dev/03_x86/00_i386/core.v Line: 43
+Info (10281): Verilog HDL Declaration information at core.v(43): object "WB" differs only in case from object "wb" in the same scope File: /home/fox/dev/03_x86/00_i386/core.v Line: 43
+Info (10281): Verilog HDL Declaration information at video.v(44): object "X" differs only in case from object "x" in the same scope File: /home/fox/dev/03_x86/00_i386/de0/video.v Line: 44
+Info (10281): Verilog HDL Declaration information at video.v(45): object "Y" differs only in case from object "y" in the same scope File: /home/fox/dev/03_x86/00_i386/de0/video.v Line: 45
+Info (10281): Verilog HDL Declaration information at sd.v(11): object "command" differs only in case from object "COMMAND" in the same scope File: /home/fox/dev/03_x86/00_i386/de0/sd.v Line: 11
