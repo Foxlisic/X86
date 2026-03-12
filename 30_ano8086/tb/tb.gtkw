@@ -1,0 +1,137 @@
+[*]
+[*] GTKWave Analyzer v3.3.66 (w)1999-2015 BSI
+[*] Wed Jan 21 05:55:21 2026
+[*]
+[dumpfile] "z:\dev\03_8086\tb\tb.vcd"
+[dumpfile_mtime] "Wed Jan 21 05:54:54 2026"
+[dumpfile_size] 32298
+[savefile] "z:\dev\03_8086\tb\tb.gtkw"
+[timestart] 107
+[size] 960 435
+[pos] -1 -1
+*-7.300000 260 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb.
+[sst_width] 319
+[signals_width] 176
+[sst_expanded] 1
+[sst_vpaned_height] 159
+@28
+tb.clock_100
+tb.clock_25
+[color] 7
+tb.rst_n
+@800200
+-IFACE
+@28
+[color] 2
+tb.C1.m0
+[color] 3
+tb.C1.cp
+@22
+tb.a[19:0]
+tb.C1.ip[15:0]
+tb.i[7:0]
+tb.o[7:0]
+@28
+tb.rst_n
+tb.w
+@c00200
+-INT
+@28
+tb.intr
+tb.C1.intrc
+@22
+tb.intv[3:0]
+@28
+tb.CTL.int_ack[1:0]
+@1401200
+-INT
+@800200
+-CTL
+@22
+[color] 3
+tb.C1.t[3:0]
+[color] 3
+tb.C1.m[3:0]
+[color] 6
+tb.C1.m1[3:0]
+[color] 6
+tb.C1.m2[2:0]
+[color] 6
+tb.C1.m3[2:0]
+[color] 6
+tb.C1.m4[2:0]
+@800201
+-PARAM
+@29
+tb.C1.over
+@23
+tb.C1.sgn[15:0]
+tb.C1.ea[15:0]
+tb.C1.opcache[7:0]
+tb.C1.opcode[7:0]
+tb.C1.modrm[7:0]
+@29
+tb.C1.size
+tb.C1.dir
+@1000201
+-PARAM
+@1000200
+-CTL
+@c00200
+-PORT
+@28
+tb.C1.pr
+tb.pw
+@22
+tb.C1.pi[7:0]
+tb.kb_d[7:0]
+@28
+tb.kb_h
+@1401200
+-PORT
+@1000200
+-IFACE
+@800200
+-REG
+@22
+[color] 6
+tb.C1.flags[11:0]
+[color] 5
+tb.C1.ax[15:0]
+[color] 5
+tb.C1.bx[15:0]
+[color] 5
+tb.C1.cx[15:0]
+[color] 5
+tb.C1.dx[15:0]
+[color] 5
+tb.C1.sp[15:0]
+[color] 5
+tb.C1.bp[15:0]
+[color] 5
+tb.C1.si[15:0]
+[color] 5
+tb.C1.di[15:0]
+[color] 5
+tb.C1.ss[15:0]
+[color] 5
+tb.C1.ds[15:0]
+[color] 5
+tb.C1.es[15:0]
+[color] 5
+tb.C1.cs[15:0]
+@1000200
+-REG
+@800200
+-ALU
+@28
+tb.C1.alu[2:0]
+@22
+tb.C1.op1[15:0]
+tb.C1.op2[15:0]
+tb.C1.wb[15:0]
+@1000200
+-ALU
+[pattern_trace] 1
+[pattern_trace] 0
