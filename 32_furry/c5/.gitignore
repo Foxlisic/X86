@@ -1,5 +1,8 @@
 *.map
 *.mif
+*.bak
+de0.qws
+simulation
 incremental_db
 output_files
 db/

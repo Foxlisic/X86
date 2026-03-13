@@ -44,7 +44,8 @@ module core
     input       [11:0]  _flags
 );
 
-assign a = cp ? sgn*16 + ea : cs*16 + eip;
+assign a  = cp ? sgn*16 + ea : cs*16 + eip;
+assign m0 = (m == 0 && t == RUN);
 
 localparam
     RUN         = 0, // Исполнение
@@ -62,9 +63,12 @@ localparam CF  = 0, PF  = 2, AF  = 4, ZF   = 6, SF  = 7, TF  = 8, IF  = 9, DF  =
 
 // -----------------------------------------------------
 `define CPEN cp <= cpen; if (!cpen) begin m1 <= 0; t <= RUN; end
-`define TERM {m, rep, over, sgn} <= ds;
+`define TERM {m, rep, over, op66, op67, sgn} <= ds;
 // Если эта процедура является завершающей, так как переход идет на RUN
 `define TERM_FN if (next == RUN && !m) `TERM
+// Подготовка записи в 8 битный регистр
+`define WR8(a)  {modrm[5:3], dir, size} <= {a, 2'b10}
+`define WR16(a) {modrm[5:3], dir, size} <= {a, 2'b11}
 // -----------------------------------------------------
 reg         cp;                     // =1 Указатель на SGN:EA =0 Иначе CS:IP
 reg         cpm;                    // =0 Устанавливается cp после MODRM
@@ -82,7 +86,7 @@ reg [ 7:0]  modrm, sib, opcache;    // Кешированные значения
 reg [ 7:0]  interrupt;              // Номер прерывания
 reg [31:0]  sgn, ea;                // Выбранный SEGMENT:EA
 reg [31:0]  op1, op2, wb, t16;      // Операнды; wb-что записывать
-reg         op66, op67;             // Расширение операндов и адреса
+reg         op66, op67;             // Сужение битности 32 до 16 если =1
 // -----------------------------------------------------
 assign      m0 = (t == RUN && m == 0);
 wire        c0 = m0 && {over, rep} == 3'b0;
@@ -95,14 +99,14 @@ wire [ 31:0] r53 = u20 >> {i[5:3], 5'b0};
 wire [  7:0] s20 = u20 >> {i[1:0], 1'b0, i[2], 3'b0};
 wire [  7:0] s53 = u20 >> {i[4:3], 1'b0, i[5], 3'b0};
 // ----
-wire [ 31:0] i20 = size ? (op66 ? r20 : r20[15:0]) : s20;
-wire [ 31:0] i53 = size ? (op66 ? r53 : r53[15:0]) : s53;
+wire [ 31:0] i20 = size ? (op66 ? r20[15:0] : r20) : s20;
+wire [ 31:0] i53 = size ? (op66 ? r53[15:0] : r53) : s53;
 // ----
 wire [ 31:0] sign = {{24{i[7]}}, i};
 wire [ 31:0] eipn = eip + 1'b1;
 wire [ 31:0] ean  = ea  + 1'b1;
 // -----------------------------------------------------
-wire [4:0]  top = size ? (op66 ? 31 : 15) : 7;
+wire [4:0]  top = size ? (op66 ? 15 : 31) : 7;
 wire [32:0] ar =
     alu == ADD ? op1 + op2 :
     alu == ADC ? op1 + op2 + flags[CF] :
@@ -127,24 +131,27 @@ always @(posedge clock)
 // Сброс процессора
 if (rst_n == 0) begin
 
-    t  <= RUN;
-    m  <= 0;
-    cp <= 0;
+    t       <= RUN;
+    m       <= 0;
+    cp      <= 0;
+    op66    <= 0;
+    op67    <= 0;
+    modrm   <= 0;
 
     // Копирование первоначальных значений при сбросе
-    eax <= _eax; ebx <= _ebx; ecx <= _ecx; edx <= _edx;
-    esp <= _esp; ebp <= _ebp; esi <= _esi; edi <= _edi;
+    eax     <= _eax; ebx <= _ebx; ecx <= _ecx; edx <= _edx;
+    esp     <= _esp; ebp <= _ebp; esi <= _esi; edi <= _edi;
 
-    es  <= _es;
-    cs  <= _cs;
-    ss  <= _ss;
-    ds  <= _ds;
+    es      <= _es;
+    cs      <= _cs;
+    ss      <= _ss;
+    ds      <= _ds;
 
-    eip   <= _eip;
-    flags <= _flags;
+    eip     <= _eip;
+    flags   <= _flags;
 
-// Запуск выполнения команд процессора
 end
+// Запуск выполнения команд процессора
 else if (ce) begin
 
     w <= 0;
@@ -154,8 +161,9 @@ else if (ce) begin
 
         next    <= RUN;
         eip     <= eipn;
-        op66    <= 1;
-        op67    <= 1;
+        op1     <= 0;
+        op2     <= 0;
+        alu     <= i[5:3];
         m       <= 1;
         m1      <= 0;
         m2      <= 0;
@@ -193,6 +201,25 @@ else if (ce) begin
 
         endcase
 
+        // ### MOV rb, imm8
+        8'b10110xxx: case (m)
+
+            0: begin `WR8(opcode[2:0]); end
+            1: begin m <= 0; t <= WB; wb <= i; eip <= eipn; end
+
+        endcase
+
+        // ### MOV rv, imm [4T/6T]
+        8'b10111xxx: case (m)
+
+            0: begin `WR16(opcode[2:0]); end
+            1: begin eip <= eipn; wb        <= i; m <= 2; end
+            2: begin eip <= eipn; wb[15:8]  <= i; m <= op66 ? 0 : 3; if (op66) t <= WB; end
+            3: begin eip <= eipn; wb[23:16] <= i; m <= 4; end
+            4: begin eip <= eipn; wb[31:24] <= i; m <= 0; t <= WB; end
+
+        endcase
+
         // ### Префикс ES/CS/SS/DS [1T]
         8'b00100110: begin m <= 0; over <= 1; sgn <= es; end
         8'b00101110: begin m <= 0; over <= 1; sgn <= cs; end
@@ -221,20 +248,6 @@ else if (ce) begin
 
             if (op67) begin
 
-                ea <= i20;
-
-                // Эффективный 32-х битный адрес
-                casex (i)
-                8'b00_xxx_100: begin m1 <= 10; end          // SIB
-                8'b00_xxx_101: begin ea <= 0; m2 <= 2;  end // A32
-                8'b01_xxx_101: begin m1 <= 1; if (!over) sgn <= ss; end
-                8'b10_xxx_101: begin m1 <= 2; if (!over) sgn <= ss; end
-                8'b01_xxx_xxx: begin m1 <= 1; end           // +D8
-                8'b10_xxx_xxx: begin m1 <= 2; end           // +32
-                8'b11_xxx_xxx: begin m1 <= 0; t <= RUN; end
-                endcase
-
-            end else begin
 
                 // Вычислить эффективный 16-битный адрес
                 case (i[2:0])
@@ -259,6 +272,21 @@ else if (ce) begin
 
                 if (!over && ((^i[7:6] && i[2:0] == 3'b110) || i[2:1] == 2'b01)) sgn <= ss;
 
+            end else begin
+
+                ea <= i20;
+
+                // Эффективный 32-х битный адрес
+                casex (i)
+                8'b00_xxx_100: begin m1 <= 10; end          // SIB
+                8'b00_xxx_101: begin ea <= 0; m2 <= 2;  end // A32
+                8'b01_xxx_101: begin m1 <= 1; if (!over) sgn <= ss; end
+                8'b10_xxx_101: begin m1 <= 2; if (!over) sgn <= ss; end
+                8'b01_xxx_xxx: begin m1 <= 1; end           // +D8
+                8'b10_xxx_xxx: begin m1 <= 2; end           // +32
+                8'b11_xxx_xxx: begin m1 <= 0; t <= RUN; end
+                endcase
+
             end
 
         end
@@ -268,7 +296,7 @@ else if (ce) begin
 
         // DISP16/32
         2: begin m1 <= 3; eip <= eipn; ea <= ea + {8'b0, i}; end
-        3: begin m1 <= 4; eip <= eipn; ea <= ea + {i, 8'b0}; if (op67) m1 <= 4; else begin `CPEN; end end
+        3: begin m1 <= 4; eip <= eipn; ea <= ea + {i, 8'b0}; if (!op67) m1 <= 4; else begin `CPEN; end end
         4: begin m1 <= 5; eip <= eipn; ea <= ea + {i, 16'b0}; end
         5: begin m1 <= 0; eip <= eipn; ea <= ea + {i, 24'b0}; `CPEN; end
 
@@ -286,7 +314,7 @@ else if (ce) begin
 
             if (dir) op2[15:8] <= i; else op1[15:8] <= i;
 
-            if (op67) m1 <= 8;
+            if (!op67) m1 <= 8;
             else begin
 
                 t  <= RUN;
@@ -327,32 +355,32 @@ else if (ce) begin
 
             casex ({op66, size, dir ? modrm[5:3] : modrm[2:0]})
             // 8
-            5'b00_000: eax[ 7:0] <= wb[7:0];
-            5'b00_001: ecx[ 7:0] <= wb[7:0];
-            5'b00_010: edx[ 7:0] <= wb[7:0];
-            5'b00_011: ebx[ 7:0] <= wb[7:0];
-            5'b00_100: eax[15:8] <= wb[7:0];
-            5'b00_101: ecx[15:8] <= wb[7:0];
-            5'b00_110: edx[15:8] <= wb[7:0];
-            5'b00_111: ebx[15:8] <= wb[7:0];
-            // 16
-            5'b01_000: eax[15:0] <= wb[15:0];
-            5'b01_001: ecx[15:0] <= wb[15:0];
-            5'b01_010: edx[15:0] <= wb[15:0];
-            5'b01_011: ebx[15:0] <= wb[15:0];
-            5'b01_100: esp[15:0] <= wb[15:0];
-            5'b01_101: ebp[15:0] <= wb[15:0];
-            5'b01_110: esi[15:0] <= wb[15:0];
-            5'b01_111: edi[15:0] <= wb[15:0];
+            5'bx0_000: eax[ 7:0] <= wb[7:0];
+            5'bx0_001: ecx[ 7:0] <= wb[7:0];
+            5'bx0_010: edx[ 7:0] <= wb[7:0];
+            5'bx0_011: ebx[ 7:0] <= wb[7:0];
+            5'bx0_100: eax[15:8] <= wb[7:0];
+            5'bx0_101: ecx[15:8] <= wb[7:0];
+            5'bx0_110: edx[15:8] <= wb[7:0];
+            5'bx0_111: ebx[15:8] <= wb[7:0];
             // 32
-            5'b1x_000: eax <= wb;
-            5'b1x_001: ecx <= wb;
-            5'b1x_010: edx <= wb;
-            5'b1x_011: ebx <= wb;
-            5'b1x_100: esp <= wb;
-            5'b1x_101: ebp <= wb;
-            5'b1x_110: esi <= wb;
-            5'b1x_111: edi <= wb;
+            5'b01_000: eax <= wb;
+            5'b01_001: ecx <= wb;
+            5'b01_010: edx <= wb;
+            5'b01_011: ebx <= wb;
+            5'b01_100: esp <= wb;
+            5'b01_101: ebp <= wb;
+            5'b01_110: esi <= wb;
+            5'b01_111: edi <= wb;
+            // 16
+            5'b11_000: eax[15:0] <= wb[15:0];
+            5'b11_001: ecx[15:0] <= wb[15:0];
+            5'b11_010: edx[15:0] <= wb[15:0];
+            5'b11_011: ebx[15:0] <= wb[15:0];
+            5'b11_100: esp[15:0] <= wb[15:0];
+            5'b11_101: ebp[15:0] <= wb[15:0];
+            5'b11_110: esi[15:0] <= wb[15:0];
+            5'b11_111: edi[15:0] <= wb[15:0];
             endcase
 
             `TERM_FN;
@@ -367,7 +395,7 @@ else if (ce) begin
             w  <= size;
             ea <= ean;
 
-            if (size && op66) m2 <= 2;
+            if (size && !op66) m2 <= 2;
             else if (!size) begin m2 <= 0; cp <= 0; t <= next; `TERM_FN; end
 
         end
@@ -387,7 +415,7 @@ else if (ce) begin
         m3 <= 1; ea  <= esp - 2;
 
     end
-    1: begin o <= wb[15:8];  m3 <= op66 ? 2 : 4; ea <= ean; w <= 1; end
+    1: begin o <= wb[15:8];  m3 <= op66 ? 4 : 2; ea <= ean; w <= 1; end
     2: begin o <= wb[23:16]; m3 <= 3; ea <= ean; w <= 1; end
     3: begin o <= wb[31:24]; m3 <= 4; ea <= ean; w <= 1; end
     4: begin `TERM_FN;       m3 <= 0; cp <= 0; t <= next; end
@@ -396,7 +424,7 @@ else if (ce) begin
     // [3T] ЗАГРУЗКА ИЗ СТЕКА -> WB
     POP: case (m3)
     0: begin m3 <= 1; cp <= 1; sgn <= ss; ea <= esp; esp <= esp + 2; end
-    1: begin m3 <= op66 ? 2 : 4; wb <= i; ea <= ean; end
+    1: begin m3 <= op66 ? 4 : 2; wb <= i; ea <= ean; end
     2: begin m3 <= 3; wb[15:8]  <= i; ea <= ean; end
     3: begin m3 <= 4; wb[23:16] <= i; ea <= ean; end
     4: begin
@@ -405,7 +433,7 @@ else if (ce) begin
         m3 <= 0;
         cp <= 0;
 
-        if (op66) wb[31:24] <= i; else wb[15:8] <= i;
+        if (op66) wb[15:8] <= i; else wb[31:24] <= i;
 
         `TERM_FN;
 
