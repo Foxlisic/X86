@@ -11,7 +11,7 @@ reg [7:0] mem[1048576];
 // -----------------------------------------------------------------------------
 initial begin #4.0 rst_n = 1; #1000 $finish; end
 initial begin $dumpfile("tb.vcd"); $dumpvars(0, tb); end
-initial begin $readmemh("tb.hex", mem, 20'hFFFF0); end
+initial begin $readmemh("tb.hex", mem, 20'h00000); end
 // -----------------------------------------------------------------------------
 reg  [31:0] a_;
 wire [31:0] a;
@@ -41,11 +41,11 @@ core C1
     ._ebp   (32'h0000),
     ._esi   (32'h0000),
     ._edi   (32'h0000),
-    ._es    (16'hFFFF),
-    ._cs    (16'hF000),
-    ._ss    (16'hFFFF),
+    ._es    (16'h0002),
+    ._cs    (16'h0000),
+    ._ss    (16'h0001),
     ._ds    (16'h0000),
-    ._eip   (32'hFFF0),
+    ._eip   (32'h0000),
     ._flags (12'b0000_0000_0000)
 );
 

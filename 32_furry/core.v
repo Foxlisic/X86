@@ -45,7 +45,6 @@ module core
 );
 
 assign a  = cp ? sgn*16 + ea : cs*16 + eip;
-assign m0 = (m == 0 && t == RUN);
 
 localparam
     RUN         = 0, // Исполнение
@@ -84,7 +83,8 @@ reg [ 2:0]  m2, m3, m4;             // Фаза исполнения WB, PUSH/PO
 reg [ 2:0]  alu;                    // Функция АЛУ или сдвигов
 reg [ 7:0]  modrm, sib, opcache;    // Кешированные значения
 reg [ 7:0]  interrupt;              // Номер прерывания
-reg [31:0]  sgn, ea;                // Выбранный SEGMENT:EA
+reg [15:0]  sgn;
+reg [31:0]  ea;                     // Выбранный SEGMENT:EA
 reg [31:0]  op1, op2, wb, t16;      // Операнды; wb-что записывать
 reg         op66, op67;             // Сужение битности 32 до 16 если =1
 // -----------------------------------------------------
@@ -172,287 +172,17 @@ else if (ce) begin
         cpm     <= 1;
         cpen    <= 1;
         opcache <= i;
-        dir     <= i[1];
         size    <= i[0];
+        dir     <= i[1];
 
         if (c0) sgn <= ds;
 
     end
 
     case (t)
-
-    // ИСПОЛНЕНИЕ ИНСТРУКЦИИ
-    RUN: casex (opcode)
-
-        // ### ALU-операции с операндами ModRM [3T+]
-        8'b00xxx0xx: case (m)
-
-            0: begin t <= MODRM; alu <= opcode[5:3]; end
-            1: begin
-
-                m     <= 0;
-                t     <= alu == CMP ? RUN : WB;
-                wb    <= ar;
-                flags <= af;
-
-                if (alu == CMP) `TERM;
-
-            end
-
-        endcase
-
-        // ### MOV rb, imm8
-        8'b10110xxx: case (m)
-
-            0: begin `WR8(opcode[2:0]); end
-            1: begin m <= 0; t <= WB; wb <= i; eip <= eipn; end
-
-        endcase
-
-        // ### MOV rv, imm [4T/6T]
-        8'b10111xxx: case (m)
-
-            0: begin `WR16(opcode[2:0]); end
-            1: begin eip <= eipn; wb        <= i; m <= 2; end
-            2: begin eip <= eipn; wb[15:8]  <= i; m <= op66 ? 0 : 3; if (op66) t <= WB; end
-            3: begin eip <= eipn; wb[23:16] <= i; m <= 4; end
-            4: begin eip <= eipn; wb[31:24] <= i; m <= 0; t <= WB; end
-
-        endcase
-
-        // ### Префикс ES/CS/SS/DS [1T]
-        8'b00100110: begin m <= 0; over <= 1; sgn <= es; end
-        8'b00101110: begin m <= 0; over <= 1; sgn <= cs; end
-        8'b00110110: begin m <= 0; over <= 1; sgn <= ss; end
-        8'b00111110: begin m <= 0; over <= 1; sgn <= ds; end
-
-        // ### Opsize, Adsize
-        8'b01100110: begin m <= 0; op66 <= ~op66; end
-        8'b01100111: begin m <= 0; op67 <= ~op67; end
-
-        // ### REPNZ, REPZ [1T]
-        8'b1111001x: begin m <= 0; rep <= i[1:0]; end
-
-    endcase
-
-    // СЧИТЫВАНИЕ ОПЕРАНДОВ ИЗ РЕГИСТРОВ ИЛИ ИЗ ПАМЯТИ
-    MODRM: case (m1)
-
-        // Разбор 16/32 эффективного адреса и регистров при необходимости
-        0: begin
-
-            modrm   <= i;
-            eip     <= eipn;
-            op1     <= dir ? i53 : i20;
-            op2     <= dir ? i20 : i53;
-
-            if (op67) begin
-
-
-                // Вычислить эффективный 16-битный адрес
-                case (i[2:0])
-                3'b000: ea <= ebx[15:0] + esi[15:0];
-                3'b001: ea <= ebx[15:0] + edi[15:0];
-                3'b010: ea <= ebp[15:0] + esi[15:0];
-                3'b011: ea <= ebp[15:0] + edi[15:0];
-                3'b100: ea <= esi[15:0];
-                3'b101: ea <= edi[15:0];
-                3'b110: ea <= i[7:6] ? ebp[15:0] : 0;
-                3'b111: ea <= ebx[15:0];
-                endcase
-
-                // Возможные 16-битные смещения
-                casex (i)
-                8'b00_xxx_110: begin m1 <= 2; end           // OFFSET16
-                8'b00_xxx_xxx: begin m1 <= 6; `CPEN; end    // Читать операнд
-                8'b01_xxx_xxx: begin m1 <= 1; end           // +Смещение 8 бит
-                8'b10_xxx_xxx: begin m1 <= 2; end           // +Смещение 16 бит
-                8'b11_xxx_xxx: begin m1 <= 0; t <= RUN; end // Регистры. Вернуться к RUN
-                endcase
-
-                if (!over && ((^i[7:6] && i[2:0] == 3'b110) || i[2:1] == 2'b01)) sgn <= ss;
-
-            end else begin
-
-                ea <= i20;
-
-                // Эффективный 32-х битный адрес
-                casex (i)
-                8'b00_xxx_100: begin m1 <= 10; end          // SIB
-                8'b00_xxx_101: begin ea <= 0; m2 <= 2;  end // A32
-                8'b01_xxx_101: begin m1 <= 1; if (!over) sgn <= ss; end
-                8'b10_xxx_101: begin m1 <= 2; if (!over) sgn <= ss; end
-                8'b01_xxx_xxx: begin m1 <= 1; end           // +D8
-                8'b10_xxx_xxx: begin m1 <= 2; end           // +32
-                8'b11_xxx_xxx: begin m1 <= 0; t <= RUN; end
-                endcase
-
-            end
-
-        end
-
-        // DISP8
-        1: begin m1 <= 4; eip <= eipn; ea <= ea + sign; `CPEN; end
-
-        // DISP16/32
-        2: begin m1 <= 3; eip <= eipn; ea <= ea + {8'b0, i}; end
-        3: begin m1 <= 4; eip <= eipn; ea <= ea + {i, 8'b0}; if (!op67) m1 <= 4; else begin `CPEN; end end
-        4: begin m1 <= 5; eip <= eipn; ea <= ea + {i, 16'b0}; end
-        5: begin m1 <= 0; eip <= eipn; ea <= ea + {i, 24'b0}; `CPEN; end
-
-        // Читать 8-битный операнд
-        6: begin
-
-            if (dir) op2 <= i; else op1 <= i;
-            if (size) begin m1 <= 5; ea <= ean; end
-            else      begin m1 <= 0; cp <= cpm; t <= RUN; end
-
-        end
-
-        // Читать 16-битный операнд
-        7: begin
-
-            if (dir) op2[15:8] <= i; else op1[15:8] <= i;
-
-            if (!op67) m1 <= 8;
-            else begin
-
-                t  <= RUN;
-                m1 <= 0;
-                ea <= ea - 1;
-                cp <= cpm;
-
-            end
-
-        end
-
-        // Читать операнд 32-х бит
-        8: begin m1 <= 9; if (dir) op2[23:16] <= i; else op1[23:16] <= i; end
-        9: begin
-
-            if (dir) op2[31:24] <= i; else op1[31:24] <= i;
-
-            t  <= RUN;
-            m1 <= 0;
-            ea <= ea - 3;
-            cp <= cpm;
-
-        end
-
-        // SIB
-        10: begin end
-
-    endcase
-
-    // [1T,2-3T] ЗАПИСЬ РЕЗУЛЬТАТОВ WB,DIR,SIZE,MODRM В ПАМЯТЬ/РЕГИСТРЫ
-    WB: case (m2)
-
-        // Записать в регистры, если это явно указано
-        0: if (dir || modrm[7:6] == 2'b11) begin
-
-            t  <= next;
-            cp <= 0;
-
-            casex ({op66, size, dir ? modrm[5:3] : modrm[2:0]})
-            // 8
-            5'bx0_000: eax[ 7:0] <= wb[7:0];
-            5'bx0_001: ecx[ 7:0] <= wb[7:0];
-            5'bx0_010: edx[ 7:0] <= wb[7:0];
-            5'bx0_011: ebx[ 7:0] <= wb[7:0];
-            5'bx0_100: eax[15:8] <= wb[7:0];
-            5'bx0_101: ecx[15:8] <= wb[7:0];
-            5'bx0_110: edx[15:8] <= wb[7:0];
-            5'bx0_111: ebx[15:8] <= wb[7:0];
-            // 32
-            5'b01_000: eax <= wb;
-            5'b01_001: ecx <= wb;
-            5'b01_010: edx <= wb;
-            5'b01_011: ebx <= wb;
-            5'b01_100: esp <= wb;
-            5'b01_101: ebp <= wb;
-            5'b01_110: esi <= wb;
-            5'b01_111: edi <= wb;
-            // 16
-            5'b11_000: eax[15:0] <= wb[15:0];
-            5'b11_001: ecx[15:0] <= wb[15:0];
-            5'b11_010: edx[15:0] <= wb[15:0];
-            5'b11_011: ebx[15:0] <= wb[15:0];
-            5'b11_100: esp[15:0] <= wb[15:0];
-            5'b11_101: ebp[15:0] <= wb[15:0];
-            5'b11_110: esi[15:0] <= wb[15:0];
-            5'b11_111: edi[15:0] <= wb[15:0];
-            endcase
-
-            `TERM_FN;
-
-        end
-        // Либо записать в память младший байт wb
-        else begin w <= 1; cp <= 1; m2 <= 1; o <= wb[7:0]; end
-        // Старший байт нижнего слова
-        1: begin
-
-            o  <= wb[15:8];
-            w  <= size;
-            ea <= ean;
-
-            if (size && !op66) m2 <= 2;
-            else if (!size) begin m2 <= 0; cp <= 0; t <= next; `TERM_FN; end
-
-        end
-        // Верхнее слово
-        2: begin m2 <= 3; w <= 1; o <= wb[23:16]; end
-        3: begin m2 <= 4; w <= 1; o <= wb[31:24]; end
-        4: begin m2 <= 0; cp <= 0; t <= next; `TERM_FN; end
-
-    endcase // Завершение m2
-
-    // [3T] ВЫГРУЗКА WB -> В СТЕК
-    PUSH: case (m3)
-    0: begin
-
-        w  <= 1; o   <= wb[ 7:0];
-        cp <= 1; esp <= esp - 2; sgn <= ss;
-        m3 <= 1; ea  <= esp - 2;
-
-    end
-    1: begin o <= wb[15:8];  m3 <= op66 ? 4 : 2; ea <= ean; w <= 1; end
-    2: begin o <= wb[23:16]; m3 <= 3; ea <= ean; w <= 1; end
-    3: begin o <= wb[31:24]; m3 <= 4; ea <= ean; w <= 1; end
-    4: begin `TERM_FN;       m3 <= 0; cp <= 0; t <= next; end
-    endcase
-
-    // [3T] ЗАГРУЗКА ИЗ СТЕКА -> WB
-    POP: case (m3)
-    0: begin m3 <= 1; cp <= 1; sgn <= ss; ea <= esp; esp <= esp + 2; end
-    1: begin m3 <= op66 ? 4 : 2; wb <= i; ea <= ean; end
-    2: begin m3 <= 3; wb[15:8]  <= i; ea <= ean; end
-    3: begin m3 <= 4; wb[23:16] <= i; ea <= ean; end
-    4: begin
-
-        t  <= next;
-        m3 <= 0;
-        cp <= 0;
-
-        if (op66) wb[15:8] <= i; else wb[31:24] <= i;
-
-        `TERM_FN;
-
-    end
-
-    endcase
-
-    // [17T] ВЫЗОВ ПРОЦЕДУРЫ INTERRUPT
-    INTERRUPT: case (m4)
-    0: begin m4 <= 1; t  <= PUSH; wb <= {4'hF, flags}; next <= INTERRUPT; end
-    1: begin m4 <= 2; t  <= PUSH; wb <= cs; end
-    2: begin m4 <= 3; t  <= PUSH; wb <= eip; end
-    3: begin m4 <= 4; ea <= {interrupt, 2'b00}; sgn <= 0; cp <= 1; end
-    4: begin m4 <= 5; eip[ 7:0] <= i; ea <= ean; end
-    5: begin m4 <= 6; eip[15:8] <= i; ea <= ean; end
-    6: begin m4 <= 7; cs[ 7:0]  <= i; ea <= ean; end
-    7: begin m4 <= 0; cs[15:8]  <= i; cp <= 0; t <= RUN; flags[IF] <= 1'b0; m <= 0; `TERM; end
-    endcase
-
+    `include "core_run.v"
+    `include "core_modrm.v"
+    `include "core_proc.v"
     endcase
 
 end
