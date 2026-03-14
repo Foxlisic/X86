@@ -137,6 +137,9 @@ if (rst_n == 0) begin
     op66    <= 0;
     op67    <= 0;
     modrm   <= 0;
+    sib     <= 0;
+    over    <= 0;
+    rep     <= 0;
 
     // Копирование первоначальных значений при сбросе
     eax     <= _eax; ebx <= _ebx; ecx <= _ecx; edx <= _edx;
@@ -146,6 +149,7 @@ if (rst_n == 0) begin
     cs      <= _cs;
     ss      <= _ss;
     ds      <= _ds;
+    sgn     <= _ds;
 
     eip     <= _eip;
     flags   <= _flags;

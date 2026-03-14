@@ -7,3 +7,8 @@ derive_pll_clocks
 # Вычисляем погрешности (jitter и т.д.)
 derive_clock_uncertainty
 
+# Не пытаться вычислить межклоковые взаимодействия
+set_clock_groups -asynchronous \
+                 -group [get_clocks {u0|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk}] \
+                 -group [get_clocks {u0|altera_pll_i|general[1].gpll~PLL_OUTPUT_COUNTER|divclk}] \
+                 -group [get_clocks {u0|altera_pll_i|general[2].gpll~PLL_OUTPUT_COUNTER|divclk}]
