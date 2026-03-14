@@ -26,19 +26,11 @@ RUN: casex (opcode)
 
     endcase
 
-    // ### MOV rb, imm8 [4T+]
-    8'b10110xxx: case (m)
-
-        0: begin `WR8(opcode[2:0]); end
-        1: begin m <= 0; t <= WB; wb <= i; eip <= eipn; end
-
-    endcase
-
     // ### MOV rv, imm [4T/6T]
-    8'b10111xxx: case (m)
+    8'b1011xxxx: case (m)
 
-        0: begin `WR16(opcode[2:0]); end
-        1: begin eip <= eipn; wb        <= i; m <= 2; end
+        0: begin {dir, size, modrm[5:3]} <= {1'b1, i[3:0]}; end
+        1: begin eip <= eipn; wb        <= i; m <= size ? 2 : 0; if (size) t <= WB; end
         2: begin eip <= eipn; wb[15:8]  <= i; m <= op66 ? 0 : 3; if (op66) t <= WB; end
         3: begin eip <= eipn; wb[23:16] <= i; m <= 4; end
         4: begin eip <= eipn; wb[31:24] <= i; m <= 0; t <= WB; end
