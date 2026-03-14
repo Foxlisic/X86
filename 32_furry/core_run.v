@@ -18,6 +18,14 @@ RUN: casex (opcode)
 
     endcase
 
+    // ### INC/DEC r16/32
+    8'b0100xxxx: case (m)
+
+        0: begin `WR16(i[2:0]); op1 <= r20; op2 <= 1; alu <= i[3] ? SUB : ADD; end
+        1: begin m <= 0; t <= WB; wb <= ar; flags <= {af[11:1], flags[0]}; end
+
+    endcase
+
     // ### MOV rm|r
     8'b100010xx: case (m)
 
@@ -47,7 +55,15 @@ RUN: casex (opcode)
     8'b01100110: begin m <= 0; op66 <= ~op66; end
     8'b01100111: begin m <= 0; op67 <= ~op67; end
 
-    // ### JMP Short
+    // ### JMP near [dword]
+    8'b11101001: case (m)
+
+        1,2,3: begin ea  <= {i, ea[31:8]}; m <= m + 1; eip <= eipn; end
+        4:     begin eip <= eipn + {i, ea[31:8]}; `TERM; end
+
+    endcase
+
+    // ### JMP short [byte]
     8'b11101011: case (m)
 
         1: begin m <= 0; eip <= eipn + sign; end
