@@ -62,7 +62,7 @@ localparam CF  = 0, PF  = 2, AF  = 4, ZF   = 6, SF  = 7, TF  = 8, IF  = 9, DF  =
 
 // -----------------------------------------------------
 `define CPEN cp <= cpen; if (!cpen) begin m1 <= 0; t <= RUN; end
-`define TERM {m, rep, over, op66, op67, sgn} <= ds;
+`define TERM {m, rep, over, op66, op67, ext, sgn} <= ds;
 // Если эта процедура является завершающей, так как переход идет на RUN
 `define TERM_FN if (next == RUN && !m) `TERM
 // Подготовка записи в 8 битный регистр
@@ -75,6 +75,7 @@ reg         size;                   // =1 16bit =0 8bit
 reg         dir;                    // =0 rm,r; =1 r,rm
 reg         cpen;                   // =0 То пропускает чтение операндов
 reg         over;                   // =1 Сегмент переопределен
+reg         ext;                    // =1 Расширенный опкод
 reg         intrc;                  // Предыдущее значение intr
 reg [ 1:0]  rep;                    // Наличие REP:
 reg [ 3:0]  t, next;                // Исполняемая команда (t) в данный момент
@@ -134,6 +135,7 @@ if (rst_n == 0) begin
     t       <= RUN;
     m       <= 0;
     cp      <= 0;
+    ext     <= 0;
     op66    <= 0;
     op67    <= 0;
     modrm   <= 0;

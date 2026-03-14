@@ -2,9 +2,7 @@
             use32
             org     0
 
-            mov     ebx, $DEAD0000
-            dec     bx
-            dec     sp
-t1:         jmp     near $BABACAFE
+            add     al, [sText]
+t1:         jmp     t1
 
 sText:      db      "ABCDen-mokken baby haif!",0
