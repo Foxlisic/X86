@@ -1,6 +1,26 @@
 // ИСПОЛНЕНИЕ ИНСТРУКЦИИ
 RUN: casex ({ext,opcode})
 
+    // --- ПРЕФИКСЫ ---
+
+    // ### Префикс ES/CS/SS/DS [1T]
+    8'b00100110: begin m <= 0; over <= 1; sgn <= es; end
+    8'b00101110: begin m <= 0; over <= 1; sgn <= cs; end
+    8'b00110110: begin m <= 0; over <= 1; sgn <= ss; end
+    8'b00111110: begin m <= 0; over <= 1; sgn <= ds; end
+
+    // ### Opsize, Adsize
+    8'b01100110: begin m <= 0; op66 <= ~op66; end
+    8'b01100111: begin m <= 0; op67 <= ~op67; end
+
+    // ### Расширение опкода
+    8'b00001111: begin m <= 0; ext <= 1; end
+
+    // ### REPNZ, REPZ [1T]
+    8'b1111001x: begin m <= 0; rep <= i[1:0]; end
+
+    // --- ИНСТРУКЦИИ ---
+
     // ### ALU-операции с операндами ModRM [3T+]
     8'b00xxx0xx: case (m)
 
@@ -36,11 +56,57 @@ RUN: casex ({ext,opcode})
 
     endcase
 
+    // ### PUSH sreg
+    8'b000xx110: begin
+
+        t    <= PUSH;
+        m    <= 0;
+        op66 <= 1;
+        wb   <= i[4:3] == 2'b00 ? es : i[4:3] == 2'b01 ? cs :
+                i[4:3] == 2'b10 ? ss : ds;
+
+    end
+
+    // ### POP sreg
+    8'b000xx111: case (m)
+
+        0: begin t <= POP; op66 <= 1; end
+        1: begin case (opcode[4:3]) 2'b00: es <= wb; 2'b10: ss <= wb; 2'b11: ds <= wb; endcase `TERM; end
+
+    endcase
+
     // ### INC/DEC r16/32
     8'b0100xxxx: case (m)
 
         0: begin `WR16(i[2:0]); op1 <= r20; op2 <= 1; alu <= i[3] ? SUB : ADD; end
         1: begin m <= 0; t <= WB; wb <= ar; flags <= {af[11:1], flags[0]}; end
+
+    endcase
+
+    // Jccc b8 [1/2T]
+    8'b0111_xxxx: case (m)
+
+        0: if (branches[ opcode[3:1] ] == opcode[0]) begin `TERM; eip <= eip + 2; end
+        1: begin eip <= eipn + sign; `TERM; end
+
+    endcase
+
+    // Jccc NEAR b32 [2/5T]
+    9'b1_1000xxxx: begin
+
+        if (branches[ opcode[3:1] ] == opcode[0]) begin `TERM; eip <= eip + 5; end
+        else {ext, opcache} <= 8'hE9; // Перейти к JMP NEAR
+
+    end
+
+    // ### PUSH r [5/6T]
+    8'b01010xxx: begin t <= PUSH; wb <= r20; m <= 0; end
+
+    // ### POP r [6/8T]
+    8'b01011xxx: case (m)
+
+        0: begin `WR16(i[2:0]); t <= POP; end
+        1: begin t <= WB; m <= 0; `TERM; end
 
     endcase
 
@@ -51,6 +117,23 @@ RUN: casex ({ext,opcode})
         1: begin t <= WB; wb <= op2; m <= 0; end
 
     endcase
+
+    // ### NOP [1T]
+    // ### FWAIT [1T]
+    8'b10010000,
+    8'b10011011: begin m <= 0; `TERM; end
+
+    // ### XCHG A, reg [2T]
+    8'b10010xxx: begin
+
+        t   <= WB;
+        m   <= 0;
+        wb  <= eax;
+        eax <= op66 ? {eax[31:16], r20[15:0]} : r20;
+
+        `WR16(i[2:0]);
+
+    end
 
     // ### MOV rv, imm [3T/4T/6T]
     8'b1011xxxx: case (m)
@@ -78,22 +161,7 @@ RUN: casex ({ext,opcode})
 
     endcase
 
-    // --- ПРЕФИКСЫ ---
-
-    // ### Префикс ES/CS/SS/DS [1T]
-    8'b00100110: begin m <= 0; over <= 1; sgn <= es; end
-    8'b00101110: begin m <= 0; over <= 1; sgn <= cs; end
-    8'b00110110: begin m <= 0; over <= 1; sgn <= ss; end
-    8'b00111110: begin m <= 0; over <= 1; sgn <= ds; end
-
-    // ### Opsize, Adsize
-    8'b01100110: begin m <= 0; op66 <= ~op66; end
-    8'b01100111: begin m <= 0; op67 <= ~op67; end
-
-    // ### Расширение опкода
-    8'b00001111: begin m <= 0; ext <= 1; end
-
-    // ### REPNZ, REPZ [1T]
-    8'b1111001x: begin m <= 0; rep <= i[1:0]; end
+    // HLT
+    8'b11110100: begin m <= 0; eip <= eip; `TERM; end
 
 endcase
