@@ -2,9 +2,10 @@
             use32
             org     0
 
-t0:         mov     ax, $AAAB
-            cmp     ah, al
-            je      t0
+            mov     ebx, $11223344
+            mov     ecx, $AABBCCDD
+            test    ecx, ebx
+            ;hlt
 
             mov     esi, sText
             mov     al, [esi]

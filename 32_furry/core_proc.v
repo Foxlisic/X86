@@ -47,6 +47,6 @@ INTERRUPT: case (m4)
     4: begin m4 <= 5; eip[ 7:0] <= i; ea <= ean; end
     5: begin m4 <= 6; eip[15:8] <= i; ea <= ean; end
     6: begin m4 <= 7; cs[ 7:0]  <= i; ea <= ean; end
-    7: begin m4 <= 0; cs[15:8]  <= i; cp <= 0; t <= RUN; flags[IF] <= 1'b0; m <= 0; `TERM; end
+    7: begin m4 <= 0; cs[15:8]  <= i; cp <= 0; t <= RUN; flags[IF] <= 1'b0; `TERM; end
 
 endcase

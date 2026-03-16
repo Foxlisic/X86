@@ -79,7 +79,7 @@ RUN: casex ({ext,opcode})
     8'b0100xxxx: case (m)
 
         0: begin `WR16(i[2:0]); op1 <= r20; op2 <= 1; alu <= i[3] ? SUB : ADD; end
-        1: begin m <= 0; t <= WB; wb <= ar; flags <= {af[11:1], flags[0]}; end
+        1: begin m <= 0; wb <= ar; flags <= {af[11:1], flags[0]}; t <= WB; end
 
     endcase
 
@@ -88,6 +88,39 @@ RUN: casex ({ext,opcode})
 
         0: if (branches[ opcode[3:1] ] == opcode[0]) begin `TERM; eip <= eip + 2; end
         1: begin eip <= eipn + sign; `TERM; end
+
+    endcase
+
+    // ### MOV rm|r
+    8'b100010xx: case (m)
+
+        0: begin t <= MODRM; cpen <= i[1]; end
+        1: begin t <= WB; wb <= op2; m <= 0; end
+
+    endcase
+
+    // ### TEST r,r
+    8'b1000010x: case (m)
+
+        0: begin t <= MODRM; alu <= AND; end
+        1: begin flags <= af; `TERM; end
+
+    endcase
+
+    // ### XCHG r,r
+    8'b1000011x: case (m)
+
+        0: begin t <= MODRM;  end
+        1: begin t <= WB; wb <= op2; m <= 2; end
+        2: begin t <= WB; wb <= op1; m <= 0; dir <= 0; end
+
+    endcase
+
+    // ### LEA r16, [ea]
+    8'b10001101: case (m)
+
+        0: begin t <= MODRM; cpen <= 0; {dir,size} <= 2'b11; end
+        1: begin t <= WB; wb <= ea; m <= 0; end
 
     endcase
 
@@ -106,22 +139,14 @@ RUN: casex ({ext,opcode})
     8'b01011xxx: case (m)
 
         0: begin `WR16(i[2:0]); t <= POP; end
-        1: begin t <= WB; m <= 0; `TERM; end
-
-    endcase
-
-    // ### MOV rm|r
-    8'b100010xx: case (m)
-
-        0: begin t <= MODRM; cpen <= i[1]; end
-        1: begin t <= WB; wb <= op2; m <= 0; end
+        1: begin t <= WB; m <= 0; end
 
     endcase
 
     // ### NOP [1T]
     // ### FWAIT [1T]
     8'b10010000,
-    8'b10011011: begin m <= 0; `TERM; end
+    8'b10011011: begin `TERM; end
 
     // ### XCHG A, reg [2T]
     8'b10010xxx: begin
@@ -134,6 +159,12 @@ RUN: casex ({ext,opcode})
         `WR16(i[2:0]);
 
     end
+
+    // ### CBW / CWDE [1T]
+    8'b10011000: begin eax <= op66 ? {eax[31:16], {8{eax[7]}}, eax[7:0]} : {{16{eax[15]}}, eax[15:0]}; `TERM; end
+
+    // ### CWD / CDQ [1T]
+    8'b10011001: begin edx <= op66 ? {edx[31:16], {16{eax[15]}}} : {32{eax[31]}}; `TERM; end
 
     // ### MOV rv, imm [3T/4T/6T]
     8'b1011xxxx: case (m)
@@ -157,11 +188,27 @@ RUN: casex ({ext,opcode})
     // ### JMP short [byte]
     8'b11101011: case (m)
 
-        1: begin m <= 0; eip <= eipn + sign; end
+        1: begin eip <= eipn + sign; `TERM; end
 
     endcase
 
+    /*
+        // TEST r, i8/16
+        0: begin t <= MODRM; alu <= AND; cpm <= 0; dir <= 1; end
+        1: begin eip <= eipn; op2        <= i; m <= size ? 2 : 5; end
+        2: begin eip <= eipn; op2[15:8]  <= i; m <= op66 ? 5 : 3; end
+        3: begin eip <= eipn; op2[23:16] <= i; m <= 4;            end
+        4: begin eip <= eipn; op2[31:24] <= i; m <= 5;            end
+        5: begin flags <= af; `TERM; end
+    */
+
     // HLT
-    8'b11110100: begin m <= 0; eip <= eip; `TERM; end
+    8'b11110100: begin eip <= eip; `TERM; end
+
+    // CMC, CLC, STC, CLI, STI, CLD, STD
+    8'b11110101: begin flags[CF] <= ~flags[CF]; `TERM; end
+    8'b1111100x: begin flags[CF] <= i[0]; `TERM; end
+    8'b1111101x: begin flags[IF] <= i[0]; `TERM; end
+    8'b1111110x: begin flags[DF] <= i[0]; `TERM; end
 
 endcase
