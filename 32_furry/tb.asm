@@ -2,10 +2,8 @@
             use32
             org     0
 
-            mov     ebx, $11223344
-            mov     ecx, $AABBCCDD
-            test    ecx, ebx
-            ;hlt
+            mov     [edx-1], dword $aabb1234
+            hlt
 
             mov     esi, sText
             mov     al, [esi]
